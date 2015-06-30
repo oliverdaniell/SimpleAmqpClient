@@ -1,6 +1,10 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
-
-PROJECT(SimpleAmqpClient)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.11.8.tar.gz"
+    SHA1 "97e296c800ea792d98231ef007bfa1c4fca9ec6d"
+)
+PROJECT(SimpleAmqpClient VERSION 6.0.4 LANGUAGES C CXX)
 
 # Follow all steps below in order to calculate new ABI version when updating the library
 # NOTE: THIS IS UNRELATED to the actual project version
@@ -32,42 +36,23 @@ string(REGEX MATCH "[0-9]+" _API_VERSION_PATCH ${_API_VERSION_PATCH})
 
 set(SAC_APIVERSION ${_API_VERSION_MAJOR}.${_API_VERSION_MINOR}.${_API_VERSION_PATCH})
 
-FIND_PACKAGE(Boost 1.47.0 COMPONENTS chrono system REQUIRED)
-INCLUDE_DIRECTORIES(SYSTEM ${Boost_INCLUDE_DIRS})
+hunter_add_package(Boost COMPONENTS chrono system)
+FIND_PACKAGE(Boost CONFIG REQUIRED chrono system)
 
-SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Modules)
-FIND_PACKAGE(Rabbitmqc REQUIRED)
-INCLUDE_DIRECTORIES(SYSTEM ${Rabbitmqc_INCLUDE_DIRS})
+hunter_add_package(rabbitmq-c)
 
-option(ENABLE_SSL_SUPPORT "Enable SSL support." ${Rabbitmqc_SSL_ENABLED})
+FIND_PACKAGE(rabbitmq-c REQUIRED)
+add_definitions(-DAMQP_STATIC)
+option(ENABLE_SSL_SUPPORT "Enable SSL support." ON)
 
 if (ENABLE_SSL_SUPPORT)
   add_definitions(-DSAC_SSL_SUPPORT_ENABLED)
 endif()
 
-if (CMAKE_GENERATOR MATCHES ".*(Make|Ninja).*"
-    AND NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel" FORCE)
-  message(STATUS "CMAKE_BUILD_TYPE not specified. Using ${CMAKE_BUILD_TYPE} build")
-endif ()
-
-if (CMAKE_CXX_FLAGS STREQUAL ""
-    AND NOT DEFINED SAC_CXX_FLAGS_SET)
-  if (CMAKE_COMPILER_IS_GNUCXX
-      OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    SET(CMAKE_CXX_FLAGS "-Wall -Wextra" CACHE STRING "Flags used by the compiler during all build types." FORCE)
-  endif ()
-  set(SAC_CXX_FLAGS_SET TRUE CACHE INTERNAL "Have the SAC default compiler flags been set?")
-endif ()
-
 INCLUDE_DIRECTORIES(BEFORE src
     ${CMAKE_CURRENT_BINARY_DIR})
 
-option(BUILD_SHARED_LIBS "Build SimpleAmqpClient as a shared library" ON)
-
-if (WIN32 AND NOT BUILD_SHARED_LIBS)
-  message(FATAL_ERROR "The SimpleAmqpClient library cannot be built as a static library on Win32. Set BUILD_SHARED_LIBS=ON to get around this.")
-endif()
+option(BUILD_SHARED_LIBS "Build SimpleAmqpClient as a shared library" OFF)
 
 SET(SAC_LIB_SRCS
     src/SimpleAmqpClient/SimpleAmqpClient.h
@@ -108,7 +93,7 @@ SET(SAC_LIB_SRCS
 
 
 ADD_LIBRARY(SimpleAmqpClient ${SAC_LIB_SRCS})
-TARGET_LINK_LIBRARIES(SimpleAmqpClient ${Rabbitmqc_LIBRARY} ${Boost_LIBRARIES} ${SOCKET_LIBRARY})
+TARGET_LINK_LIBRARIES(SimpleAmqpClient Boost::chrono Boost::system rabbitmq-c::rabbitmq-static Crypt32 Ws2_32)
 
 if (WIN32)
   set_target_properties(SimpleAmqpClient PROPERTIES VERSION ${SAC_VERSION} OUTPUT_NAME SimpleAmqpClient.${SAC_SOVERSION})
@@ -116,30 +101,7 @@ else ()
   set_target_properties(SimpleAmqpClient PROPERTIES VERSION ${SAC_VERSION} SOVERSION ${SAC_SOVERSION})
 endif ()
 
-
-#ADD_EXECUTABLE(simple_connect examples/simple_connect.cpp)
-#TARGET_LINK_LIBRARIES(simple_connect SimpleAmqpClient)
-#SET_TARGET_PROPERTIES(simple_connect PROPERTIES
-#	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
-#
-#ADD_EXECUTABLE(consume_with_timeout examples/consume_with_timeout.cpp)
-#TARGET_LINK_LIBRARIES(consume_with_timeout SimpleAmqpClient ${Boost_LIBRARIES})
-#SET_TARGET_PROPERTIES(consume_with_timeout PROPERTIES
-#	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
-#
-#ADD_EXECUTABLE(envelope_test examples/envelope_test.cpp)
-#TARGET_LINK_LIBRARIES(envelope_test SimpleAmqpClient)
-#SET_TARGET_PROPERTIES(envelope_test PROPERTIES
-#	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
-#
-#ADD_EXECUTABLE(basic_return_test examples/basic_return_test.cpp)
-#TARGET_LINK_LIBRARIES(basic_return_test SimpleAmqpClient)
-#SET_TARGET_PROPERTIES(basic_return_test PROPERTIES
-#	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
-
-# Some smoke tests:
-
-option(ENABLE_TESTING "Enable smoke tests" OFF)
+option(ENABLE_TESTING "Enable smoke tests" ON)
 
 if (ENABLE_TESTING)
     enable_testing()
@@ -147,16 +109,11 @@ if (ENABLE_TESTING)
     add_subdirectory(testing)
 endif (ENABLE_TESTING)
 
-
-# Documentation generation
-SET(DOXYFILE_LATEX "NO")
-SET(PROJECT_VERSION ${SAC_VERSION})
-INCLUDE(UseDoxygen)
-
-INSTALL(TARGETS SimpleAmqpClient
+INSTALL(TARGETS SimpleAmqpClient EXPORT SimpleAmqpClientTargets
     RUNTIME DESTINATION bin
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
+    INCLUDES DESTINATION include
     )
 
 INSTALL(FILES
@@ -182,22 +139,33 @@ set(exec_prefix "\${prefix}")
 set(libdir "\${exec_prefix}/lib")
 set(includedir "\${prefix}/include")
 
-foreach(_lib ${Boost_LIBRARIES})
-    get_filename_component(_LIBPATH ${_lib} PATH)
-    if (NOT _LIBPATH STREQUAL _LASTLIBPATH)
-        set(libs_private "${libs_private} -L${_LIBPATH}")
-        set(_LASTLIBPATH ${_LIBPATH})
-    endif()
+set(config_install_dir "lib/cmake/${PROJECT_NAME}")
+set(include_install_dir "include")
+set(generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(version_config "${generated_dir}/${PROJECT_NAME}ConfigVersion.cmake")
+set(project_config "${generated_dir}/${PROJECT_NAME}Config.cmake")
+set(targets_export_name "${PROJECT_NAME}Targets")
+set(namespace "${PROJECT_NAME}::")
 
-    get_filename_component(_LIBNAME ${_lib} NAME_WE)
-    string(REGEX REPLACE "^lib" "" _LIBNAME ${_LIBNAME})
-    set(_LIBNAME "-l${_LIBNAME}")
-    set(libs_private "${libs_private} ${_LIBNAME}")
-endforeach()
+include(CMakePackageConfigHelpers)
 
-configure_file(libSimpleAmqpClient.pc.in ${CMAKE_CURRENT_BINARY_DIR}/libSimpleAmqpClient.pc @ONLY)
+configure_file("cmake/Config.cmake.in" "${project_config}" @ONLY)
+    
+# Note: PROJECT_VERSION is used as a VERSION
+write_basic_package_version_file(
+  "${version_config}" COMPATIBILITY SameMajorVersion
+)
 
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/libSimpleAmqpClient.pc
-    DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/pkgconfig
-    )
+# Note: variable 'targets_export_name' used
+configure_file("cmake/Config.cmake.in" "${project_config}" @ONLY)
+
+install(
+  FILES "${project_config}" "${version_config}"
+  DESTINATION "${config_install_dir}"
+)
+
+install(
+  EXPORT "${targets_export_name}"
+  NAMESPACE "${namespace}"
+  DESTINATION "${config_install_dir}"
+  )
