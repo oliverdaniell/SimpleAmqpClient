@@ -93,7 +93,7 @@ SET(SAC_LIB_SRCS
 
 
 ADD_LIBRARY(SimpleAmqpClient ${SAC_LIB_SRCS})
-TARGET_LINK_LIBRARIES(SimpleAmqpClient Boost::chrono Boost::system rabbitmq-c::rabbitmq-static Crypt32 Ws2_32)
+TARGET_LINK_LIBRARIES(SimpleAmqpClient Boost::chrono Boost::system rabbitmq-c::rabbitmq-static Crypt32 ws2_32)
 
 if (WIN32)
   set_target_properties(SimpleAmqpClient PROPERTIES VERSION ${SAC_VERSION} OUTPUT_NAME SimpleAmqpClient.${SAC_SOVERSION})
