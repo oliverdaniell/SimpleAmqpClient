@@ -1,8 +1,8 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
 include("cmake/HunterGate.cmake")
 HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.11.8.tar.gz"
-    SHA1 "97e296c800ea792d98231ef007bfa1c4fca9ec6d"
+    URL "https://github.com/oliverdaniell/hunter/archive/v0.11.6-seebyte-p2.tar.gz"
+    SHA1 "12eb0f9955005fb159a18b119772c51b6edf342a"
 )
 PROJECT(SimpleAmqpClient VERSION 6.0.4 LANGUAGES C CXX)
 
@@ -93,7 +93,7 @@ SET(SAC_LIB_SRCS
 
 
 ADD_LIBRARY(SimpleAmqpClient ${SAC_LIB_SRCS})
-TARGET_LINK_LIBRARIES(SimpleAmqpClient Boost::chrono Boost::system rabbitmq-c::rabbitmq-static Crypt32 ws2_32)
+TARGET_LINK_LIBRARIES(SimpleAmqpClient Boost::chrono Boost::system rabbitmq-c::rabbitmq-static)
 
 if (WIN32)
   set_target_properties(SimpleAmqpClient PROPERTIES VERSION ${SAC_VERSION} OUTPUT_NAME SimpleAmqpClient.${SAC_SOVERSION})
