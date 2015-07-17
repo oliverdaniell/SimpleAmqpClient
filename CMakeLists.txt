@@ -1,9 +1,4 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.0)
-include("cmake/HunterGate.cmake")
-HunterGate(
-    URL "https://github.com/oliverdaniell/hunter/archive/v0.11.6-seebyte-p2.tar.gz"
-    SHA1 "12eb0f9955005fb159a18b119772c51b6edf342a"
-)
 PROJECT(SimpleAmqpClient VERSION 6.0.4 LANGUAGES C CXX)
 
 # Follow all steps below in order to calculate new ABI version when updating the library
@@ -43,7 +38,7 @@ hunter_add_package(rabbitmq-c)
 
 FIND_PACKAGE(rabbitmq-c REQUIRED)
 add_definitions(-DAMQP_STATIC)
-option(ENABLE_SSL_SUPPORT "Enable SSL support." ON)
+option(ENABLE_SSL_SUPPORT "Enable SSL support." OFF)
 
 if (ENABLE_SSL_SUPPORT)
   add_definitions(-DSAC_SSL_SUPPORT_ENABLED)
